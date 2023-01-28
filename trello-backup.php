@@ -66,6 +66,7 @@ $url_organizations = "https://api.trello.com/1/members/me/organizations?&key=$ke
 $response = file_get_contents($url_organizations, false, $ctx);
 $organizationsInfo = json_decode($response);
 $organizations = array();
+
 foreach ($organizationsInfo as $org) {
     $organizations[$org->id] = $org->displayName;
 }
@@ -124,40 +125,41 @@ foreach ($boards as $id => $board) {
     }
     
     $filename = $dirname . '.json';
-
-    echo "recording " . (($board->closed) ? 'the closed ' : '') . "board '" . $board->name . "' " . (empty($board->orgName) ? "" : "(within organization '" . $board->orgName . "')") . " in filename $filename ...\n";
-    $response = file_get_contents($url_individual_board_json, false, $ctx);
-    $decoded = json_decode($response);
-    if (empty($decoded)) {
-        die("The board '$board->name' or organization '$board->orgName' could not be downloaded, response was : $response ");
-    }
-    if(file_put_contents($filename, $response) === false) {
-        die("An error occured while writing to $filename");
-    }
-
-    // 5a) Backup the attachments
-    if($backup_attachments) {
-        $trelloObject = json_decode($response);
-        $attachments = array();
-        foreach ($trelloObject->actions as $member) {
-            if (isset($member->data->attachment->url)) {
-                $attachments[$member->data->attachment->url] = $member->data->attachment->id . '-' . $member->data->attachment->name;
-            }
+    if (!file_exists($filename)) {
+        echo "recording " . (($board->closed) ? 'the closed ' : '') . "board '" . $board->name . "' " . (empty($board->orgName) ? "" : "(within organization '" . $board->orgName . "')") . " in filename $filename ...\n";
+        $response = file_get_contents($url_individual_board_json, false, $ctx);
+        $decoded = json_decode($response);
+        if (empty($decoded)) {
+            die("The board '$board->name' or organization '$board->orgName' could not be downloaded, response was : $response ");
+        }
+        if(file_put_contents($filename, $response) === false) {
+            die("An error occured while writing to $filename");
         }
 
-        if(!empty($attachments)) {
-            echo "\t" . count($attachments) . " attachments will now be downloaded and backed up...\n";
+        // 5a) Backup the attachments
+        if($backup_attachments) {
+            $trelloObject = json_decode($response);
+            $attachments = array();
+            foreach ($trelloObject->actions as $member) {
+                if (isset($member->data->attachment->url)) {
+                    $attachments[$member->data->attachment->url] = $member->data->attachment->id . '-' . $member->data->attachment->name;
+                }
+            }
 
-            if (!file_exists($dirname)) {
-                mkdir($dirname, 0777, true);
+            if(!empty($attachments)) {
+                echo "\t" . count($attachments) . " attachments will now be downloaded and backed up...\n";
+
+                if (!file_exists($dirname)) {
+                    mkdir($dirname, 0777, true);
+                }
+                $i = 1;
+                foreach ($attachments as $url => $name) {
+                    $pathForAttachment = $dirname . '/' . sanitize_file_name($name);
+                    file_put_contents($pathForAttachment, file_get_contents($url));
+                    echo "\t" . $i++ . ") " . $name . " in " . $pathForAttachment . "\n";
+                }
             }
-            $i = 1;
-            foreach ($attachments as $url => $name) {
-                $pathForAttachment = $dirname . '/' . sanitize_file_name($name);
-                file_put_contents($pathForAttachment, file_get_contents($url));
-                echo "\t" . $i++ . ") " . $name . " in " . $pathForAttachment . "\n";
-            }
-        }
+        }   
     }
 
 }
